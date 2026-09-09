@@ -100,7 +100,7 @@ class MainActivity : FlutterActivity() {
                     } else {
 
                         result.success(
-                            controller.testNext()
+                            controller.next()
                         )
                     }
                 }
@@ -121,7 +121,7 @@ class MainActivity : FlutterActivity() {
                     } else {
 
                         result.success(
-                            controller.testPause()
+                            controller.pause()
                         )
                     }
                 }
@@ -142,7 +142,7 @@ class MainActivity : FlutterActivity() {
                     } else {
 
                         result.success(
-                            controller.testPlay()
+                            controller.play()
                         )
                     }
                 }

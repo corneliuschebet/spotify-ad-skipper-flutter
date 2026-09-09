@@ -1,6 +1,7 @@
 package com.example.spotify_ad_skipper
 
 import android.content.ComponentName
+import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -16,9 +17,18 @@ class SpotifyMediaController(
         private const val SPOTIFY_PACKAGE = "com.spotify.music"
     }
 
-    /**
-     * Find Spotify's active media session.
-     */
+    data class PlaybackSnapshot(
+        val available: Boolean,
+        val title: String,
+        val artist: String,
+        val playbackState: Int,
+        val actions: Long,
+        val position: Long,
+        val duration: Long,
+        val isPlaying: Boolean,
+        val isPaused: Boolean
+    )
+
     private fun getSpotifyController(): MediaController? {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
@@ -26,7 +36,6 @@ class SpotifyMediaController(
                 TAG,
                 "❌ Media sessions are not available"
             )
-
             return null
         }
 
@@ -38,12 +47,10 @@ class SpotifyMediaController(
                 )
 
             if (mediaSessionManager == null) {
-
                 Log.e(
                     TAG,
                     "❌ MediaSessionManager unavailable"
                 )
-
                 return null
             }
 
@@ -62,20 +69,20 @@ class SpotifyMediaController(
                 "🎛️ Active media sessions: ${controllers.size}"
             )
 
-            val spotifyController =
-                controllers.firstOrNull {
-                    it.packageName == SPOTIFY_PACKAGE
-                }
-
-            if (spotifyController == null) {
-
+            controllers.firstOrNull {
+                it.packageName == SPOTIFY_PACKAGE
+            }?.also {
+                Log.d(
+                    TAG,
+                    "✅ Spotify media session found"
+                )
+            } ?: run {
                 Log.d(
                     TAG,
                     "❌ No active Spotify media session"
                 )
+                null
             }
-
-            spotifyController
 
         } catch (exception: Exception) {
 
@@ -89,132 +96,121 @@ class SpotifyMediaController(
         }
     }
 
-    /**
-     * Test Spotify's NEXT command.
-     */
-    fun testNext(): Boolean {
+    fun getPlaybackSnapshot(): PlaybackSnapshot {
 
         val controller =
             getSpotifyController()
-                ?: return false
 
-        val playbackState =
+        if (controller == null) {
+            return PlaybackSnapshot(
+                available = false,
+                title = "",
+                artist = "",
+                playbackState = -1,
+                actions = 0L,
+                position = 0L,
+                duration = 0L,
+                isPlaying = false,
+                isPaused = false
+            )
+        }
+
+        val state =
             controller.playbackState
 
+        val metadata =
+            controller.metadata
+
+        val playbackState =
+            state?.state
+                ?: PlaybackState.STATE_NONE
+
         val actions =
-            playbackState?.actions ?: 0L
+            state?.actions
+                ?: 0L
 
-        Log.d(
-            TAG,
-            "🎛️ Spotify actions: $actions"
+        val title =
+            metadata?.getString(
+                MediaMetadata.METADATA_KEY_TITLE
+            ) ?: ""
+
+        val artist =
+            metadata?.getString(
+                MediaMetadata.METADATA_KEY_ARTIST
+            ) ?: ""
+
+        val position =
+            state?.position ?: 0L
+
+        val duration =
+            metadata?.getLong(
+                MediaMetadata.METADATA_KEY_DURATION
+            ) ?: 0L
+
+        return PlaybackSnapshot(
+            available = true,
+            title = title,
+            artist = artist,
+            playbackState = playbackState,
+            actions = actions,
+            position = position,
+            duration = duration,
+            isPlaying =
+                playbackState ==
+                    PlaybackState.STATE_PLAYING,
+            isPaused =
+                playbackState ==
+                    PlaybackState.STATE_PAUSED
         )
-
-        if (
-            (actions and PlaybackState.ACTION_SKIP_TO_NEXT) == 0L
-        ) {
-
-            Log.d(
-                TAG,
-                "❌ Spotify does not currently expose SKIP_TO_NEXT"
-            )
-
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "next_unavailable"
-                )
-            )
-
-            return false
-        }
-
-        return try {
-
-            val beforeTitle =
-                getTrackTitle(controller)
-
-            Log.d(
-                TAG,
-                "⏭️ NEXT TEST"
-            )
-
-            Log.d(
-                TAG,
-                "Current track: $beforeTitle"
-            )
-
-            Log.d(
-                TAG,
-                "Sending SKIP_TO_NEXT"
-            )
-
-            controller.transportControls.skipToNext()
-
-            Log.d(
-                TAG,
-                "✅ SKIP_TO_NEXT command sent"
-            )
-
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "next_sent",
-                    "trackBefore" to beforeTitle
-                )
-            )
-
-            true
-
-        } catch (exception: Exception) {
-
-            Log.e(
-                TAG,
-                "❌ SKIP_TO_NEXT failed",
-                exception
-            )
-
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "next_error",
-                    "error" to (
-                        exception.message
-                            ?: "unknown_error"
-                    )
-                )
-            )
-
-            false
-        }
     }
 
-    /**
-     * Test Spotify's PAUSE command.
-     */
-    fun testPause(): Boolean {
+    fun canPause(): Boolean {
+        return hasAction(
+            PlaybackState.ACTION_PAUSE
+        )
+    }
+
+    fun canPlay(): Boolean {
+        return hasAction(
+            PlaybackState.ACTION_PLAY
+        )
+    }
+
+    fun canPlayPause(): Boolean {
+        return hasAction(
+            PlaybackState.ACTION_PLAY_PAUSE
+        )
+    }
+
+    fun canNext(): Boolean {
+        return hasAction(
+            PlaybackState.ACTION_SKIP_TO_NEXT
+        )
+    }
+
+    fun canPrevious(): Boolean {
+        return hasAction(
+            PlaybackState.ACTION_SKIP_TO_PREVIOUS
+        )
+    }
+
+    fun pause(): Boolean {
 
         val controller =
             getSpotifyController()
                 ?: return false
 
-        val playbackState =
-            controller.playbackState
-
-        val actions =
-            playbackState?.actions ?: 0L
-
         if (
-            (actions and PlaybackState.ACTION_PAUSE) == 0L
+            !hasAction(
+                controller,
+                PlaybackState.ACTION_PAUSE
+            )
         ) {
-
             Log.d(
                 TAG,
                 "❌ Spotify does not currently expose PAUSE"
             )
 
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "pause_unavailable"
-                )
-            )
-
             return false
         }
 
@@ -222,12 +218,7 @@ class SpotifyMediaController(
 
             Log.d(
                 TAG,
-                "⏸️ PAUSE TEST"
-            )
-
-            Log.d(
-                TAG,
-                "Sending PAUSE"
+                "⏸️ Sending PAUSE"
             )
 
             controller.transportControls.pause()
@@ -235,12 +226,6 @@ class SpotifyMediaController(
             Log.d(
                 TAG,
                 "✅ PAUSE command sent"
-            )
-
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "pause_sent"
-                )
             )
 
             true
@@ -253,79 +238,69 @@ class SpotifyMediaController(
                 exception
             )
 
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "pause_error",
-                    "error" to (
-                        exception.message
-                            ?: "unknown_error"
-                    )
-                )
-            )
-
             false
         }
     }
 
-    /**
-     * Test Spotify's PLAY command.
-     */
-    fun testPlay(): Boolean {
+    fun play(): Boolean {
 
         val controller =
             getSpotifyController()
                 ?: return false
 
-        val playbackState =
-            controller.playbackState
-
-        val actions =
-            playbackState?.actions ?: 0L
-
-        if (
-            (actions and PlaybackState.ACTION_PLAY) == 0L
-        ) {
-
-            Log.d(
-                TAG,
-                "⚠️ Spotify does not currently expose PLAY"
-            )
-
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "play_unavailable"
-                )
-            )
-
-            return false
-        }
-
         return try {
 
-            Log.d(
-                TAG,
-                "▶️ PLAY TEST"
-            )
+            val actions =
+                controller.playbackState
+                    ?.actions
+                    ?: 0L
 
-            Log.d(
-                TAG,
-                "Sending PLAY"
-            )
+            if (
+                (actions and PlaybackState.ACTION_PLAY) != 0L
+            ) {
 
-            controller.transportControls.play()
-
-            Log.d(
-                TAG,
-                "✅ PLAY command sent"
-            )
-
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "play_sent"
+                Log.d(
+                    TAG,
+                    "▶️ Sending PLAY"
                 )
+
+                controller.transportControls.play()
+
+                Log.d(
+                    TAG,
+                    "✅ PLAY command sent"
+                )
+
+                return true
+            }
+
+            if (
+                (actions and
+                    PlaybackState.ACTION_PLAY_PAUSE) != 0L
+            ) {
+
+                Log.d(
+                    TAG,
+                    "▶️ ACTION_PLAY unavailable; using PLAY_PAUSE"
+                )
+
+                controller.transportControls
+                    .play()
+
+                Log.d(
+                    TAG,
+                    "✅ PLAY fallback command sent"
+                )
+
+                return true
+            }
+
+            Log.d(
+                TAG,
+                "❌ Spotify does not currently expose PLAY"
             )
 
-            true
+            false
 
         } catch (exception: Exception) {
 
@@ -335,73 +310,178 @@ class SpotifyMediaController(
                 exception
             )
 
-            SpotifyEventBridge.sendEvent(
-                mapOf(
-                    "type" to "play_error",
-                    "error" to (
-                        exception.message
-                            ?: "unknown_error"
-                    )
-                )
+            false
+        }
+    }
+
+    fun playPause(): Boolean {
+
+        val controller =
+            getSpotifyController()
+                ?: return false
+
+        val actions =
+            controller.playbackState
+                ?.actions
+                ?: 0L
+
+        if (
+            (actions and
+                PlaybackState.ACTION_PLAY_PAUSE) == 0L
+        ) {
+            Log.d(
+                TAG,
+                "❌ Spotify does not expose PLAY_PAUSE"
+            )
+
+            return false
+        }
+
+        return try {
+
+            Log.d(
+                TAG,
+                "⏯️ Sending PLAY_PAUSE"
+            )
+
+            controller.transportControls
+                .play()
+
+            Log.d(
+                TAG,
+                "✅ PLAY_PAUSE command sent"
+            )
+
+            true
+
+        } catch (exception: Exception) {
+
+            Log.e(
+                TAG,
+                "❌ PLAY_PAUSE failed",
+                exception
             )
 
             false
         }
     }
 
-    /**
-     * Inspect Spotify's current media session.
-     *
-     * This is currently diagnostic only.
-     * Automatic ad skipping is NOT performed here yet.
-     */
-    fun inspectAndSkip(): Boolean {
+    fun next(): Boolean {
 
         val controller =
             getSpotifyController()
                 ?: return false
 
-        inspectController(controller)
+        if (
+            !hasAction(
+                controller,
+                PlaybackState.ACTION_SKIP_TO_NEXT
+            )
+        ) {
 
-        return false
+            Log.d(
+                TAG,
+                "❌ Spotify does not currently expose SKIP_TO_NEXT"
+            )
+
+            return false
+        }
+
+        return try {
+
+            val beforeTitle =
+                getTrackTitle(controller)
+
+            Log.d(
+                TAG,
+                "⏭️ Sending SKIP_TO_NEXT"
+            )
+
+            Log.d(
+                TAG,
+                "Current track: $beforeTitle"
+            )
+
+            controller.transportControls
+                .skipToNext()
+
+            Log.d(
+                TAG,
+                "✅ SKIP_TO_NEXT command sent"
+            )
+
+            true
+
+        } catch (exception: Exception) {
+
+            Log.e(
+                TAG,
+                "❌ SKIP_TO_NEXT failed",
+                exception
+            )
+
+            false
+        }
     }
 
-    private fun inspectController(
-        controller: MediaController
-    ) {
+    fun previous(): Boolean {
 
-        val playbackState =
-            controller.playbackState
+        val controller =
+            getSpotifyController()
+                ?: return false
 
-        val metadata =
-            controller.metadata
+        if (
+            !hasAction(
+                controller,
+                PlaybackState.ACTION_SKIP_TO_PREVIOUS
+            )
+        ) {
 
-        val title =
-            metadata?.getString(
-                android.media.MediaMetadata.METADATA_KEY_TITLE
-            ) ?: ""
+            Log.d(
+                TAG,
+                "❌ Spotify does not currently expose SKIP_TO_PREVIOUS"
+            )
 
-        val artist =
-            metadata?.getString(
-                android.media.MediaMetadata.METADATA_KEY_ARTIST
-            ) ?: ""
+            return false
+        }
 
-        val duration =
-            metadata?.getLong(
-                android.media.MediaMetadata.METADATA_KEY_DURATION
-            ) ?: 0L
+        return try {
 
-        val position =
-            playbackState?.position ?: 0L
+            Log.d(
+                TAG,
+                "⏮️ Sending SKIP_TO_PREVIOUS"
+            )
 
-        val bufferedPosition =
-            playbackState?.bufferedPosition ?: 0L
+            controller.transportControls
+                .skipToPrevious()
 
-        val state =
-            playbackState?.state ?: -1
+            Log.d(
+                TAG,
+                "✅ SKIP_TO_PREVIOUS command sent"
+            )
 
-        val actions =
-            playbackState?.actions ?: 0L
+            true
+
+        } catch (exception: Exception) {
+
+            Log.e(
+                TAG,
+                "❌ SKIP_TO_PREVIOUS failed",
+                exception
+            )
+
+            false
+        }
+    }
+
+    fun inspectAndSkip(): Boolean {
+
+        val snapshot =
+            getPlaybackSnapshot()
+
+        if (!snapshot.available) {
+            return false
+        }
 
         Log.d(
             TAG,
@@ -410,50 +490,69 @@ class SpotifyMediaController(
 
         Log.d(
             TAG,
-            "Package: ${controller.packageName}"
+            "Track: ${snapshot.title}"
         )
 
         Log.d(
             TAG,
-            "Track: $title"
+            "Artist: ${snapshot.artist}"
         )
 
         Log.d(
             TAG,
-            "Artist: $artist"
+            "Playback state: ${snapshot.playbackState}"
         )
 
         Log.d(
             TAG,
-            "Playback state: $state"
+            "Actions: ${snapshot.actions}"
         )
 
         Log.d(
             TAG,
-            "Actions: $actions"
+            "Position: ${snapshot.position} ms"
         )
 
         Log.d(
             TAG,
-            "Position: $position ms"
+            "Duration: ${snapshot.duration} ms"
         )
 
-        Log.d(
-            TAG,
-            "Buffered: $bufferedPosition ms"
-        )
-
-        Log.d(
-            TAG,
-            "Duration: $duration ms"
-        )
-
-        decodeActions(actions)
+        decodeActions(snapshot.actions)
 
         Log.d(
             TAG,
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         )
+
+        return false
+    }
+
+    private fun hasAction(
+        action: Long
+    ): Boolean {
+
+        val controller =
+            getSpotifyController()
+                ?: return false
+
+        return hasAction(
+            controller,
+            action
+        )
+    }
+
+    private fun hasAction(
+        controller: MediaController,
+        action: Long
+    ): Boolean {
+
+        val actions =
+            controller.playbackState
+                ?.actions
+                ?: 0L
+
+        return (actions and action) != 0L
     }
 
     private fun getTrackTitle(
@@ -462,7 +561,7 @@ class SpotifyMediaController(
 
         return controller.metadata
             ?.getString(
-                android.media.MediaMetadata.METADATA_KEY_TITLE
+                MediaMetadata.METADATA_KEY_TITLE
             )
             ?: ""
     }
