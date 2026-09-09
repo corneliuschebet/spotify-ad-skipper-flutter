@@ -38,8 +38,10 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage>
     with WidgetsBindingObserver {
   Map<String, dynamic>? platformInfo;
+
   bool notificationListenerEnabled = false;
   bool loadingNotificationStatus = true;
+  bool openingSettings = false;
 
   @override
   void initState() {
@@ -98,6 +100,26 @@ class _DashboardPageState extends State<DashboardPage>
         loadingNotificationStatus = false;
       });
     }
+  }
+
+  Future<void> _enableSkipper() async {
+    if (openingSettings) return;
+
+    setState(() {
+      openingSettings = true;
+    });
+
+    try {
+      await AndroidBridge.openNotificationListenerSettings();
+    } catch (error) {
+      debugPrint('Failed to open notification listener settings: $error');
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      openingSettings = false;
+    });
   }
 
   @override
@@ -229,9 +251,18 @@ class _DashboardPageState extends State<DashboardPage>
 
   Widget _buildControlButton() {
     return FilledButton.icon(
-      onPressed: () {},
-      icon: const Icon(Icons.power_settings_new),
-      label: const Text('Enable Skipper', style: TextStyle(fontSize: 16)),
+      onPressed: openingSettings ? null : _enableSkipper,
+      icon: openingSettings
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.power_settings_new),
+      label: Text(
+        openingSettings ? 'Opening Settings...' : 'Enable Skipper',
+        style: const TextStyle(fontSize: 16),
+      ),
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 16),
       ),
