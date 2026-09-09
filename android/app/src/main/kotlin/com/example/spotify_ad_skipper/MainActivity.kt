@@ -1,6 +1,7 @@
 package com.example.spotify_ad_skipper
 
 import android.os.Build
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -31,7 +32,7 @@ class MainActivity : FlutterActivity() {
                 }
 
                 "isNotificationListenerEnabled" -> {
-                    result.success(false)
+                    result.success(isNotificationListenerEnabled())
                 }
 
                 "isSkipperRunning" -> {
@@ -43,5 +44,18 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+    }
+
+    private fun isNotificationListenerEnabled(): Boolean {
+        val enabledListeners = Settings.Secure.getString(
+            contentResolver,
+            "enabled_notification_listeners"
+        ) ?: return false
+
+        return enabledListeners
+            .split(":")
+            .any { componentName ->
+                componentName.startsWith(packageName)
+            }
     }
 }
