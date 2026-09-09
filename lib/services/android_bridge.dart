@@ -17,6 +17,12 @@ class AndroidBridge {
     return result ?? false;
   }
 
+  static Future<void> openNotificationListenerSettings() async {
+    await _channel.invokeMethod<void>(
+      'openNotificationListenerSettings',
+    );
+  }
+
   static Future<bool> isSkipperRunning() async {
     final result = await _channel.invokeMethod<bool>('isSkipperRunning');
 
