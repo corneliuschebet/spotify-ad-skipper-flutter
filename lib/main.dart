@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/android_bridge.dart';
 
 void main() {
   runApp(const SpotifyAdSkipperApp());
@@ -26,8 +27,35 @@ class SpotifyAdSkipperApp extends StatelessWidget {
   }
 }
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  Map<String, dynamic>? platformInfo;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlatformInfo();
+  }
+
+  Future<void> _loadPlatformInfo() async {
+    try {
+      final info = await AndroidBridge.getPlatformInfo();
+
+      if (!mounted) return;
+
+      setState(() {
+        platformInfo = info;
+      });
+    } catch (error) {
+      debugPrint('Failed to load Android platform information: $error');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +73,8 @@ class DashboardPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildStatusCard(),
+            const SizedBox(height: 20),
+            _buildPlatformCard(),
             const SizedBox(height: 20),
             _buildControlButton(),
             const SizedBox(height: 24),
@@ -78,6 +108,52 @@ class DashboardPage extends StatelessWidget {
             _statusRow(Icons.music_note, 'Spotify', 'Waiting'),
             _statusRow(Icons.notifications, 'Notifications', 'Not connected'),
             _statusRow(Icons.settings, 'Android Service', 'Not configured'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlatformCard() {
+    final info = platformInfo;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.phone_android),
+                SizedBox(width: 10),
+                Text(
+                  'Android Device',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _statusRow(
+              Icons.business,
+              'Manufacturer',
+              info?['manufacturer']?.toString() ?? 'Loading...',
+            ),
+            _statusRow(
+              Icons.smartphone,
+              'Model',
+              info?['model']?.toString() ?? 'Loading...',
+            ),
+            _statusRow(
+              Icons.android,
+              'Android',
+              info?['androidVersion']?.toString() ?? 'Loading...',
+            ),
+            _statusRow(
+              Icons.code,
+              'SDK',
+              info?['sdkInt']?.toString() ?? 'Loading...',
+            ),
           ],
         ),
       ),
