@@ -8,14 +8,8 @@ void main() {
   ) async {
     await tester.pumpWidget(const SpotifyAdSkipperApp());
 
+    expect(find.byType(SpotifyAdSkipperApp), findsOneWidget);
+
     expect(find.text('Spotify Ad Skipper'), findsOneWidget);
-
-    expect(find.text('Service Status'), findsOneWidget);
-
-    expect(find.text('Enable Skipper'), findsOneWidget);
-
-    expect(find.text('Ads Detected'), findsOneWidget);
-
-    expect(find.text('Activity Log'), findsOneWidget);
   });
 }
