@@ -38,15 +38,21 @@ class SpotifyNotificationListener : NotificationListenerService() {
                 ?.trim()
                 ?: ""
 
-        // Ignore completely empty Spotify notification updates.
         if (title.isEmpty() && text.isEmpty() && bigText.isEmpty()) {
             Log.d(TAG, "⚪ IGNORED EMPTY NOTIFICATION")
+
+            SpotifyEventBridge.sendEvent(
+                mapOf(
+                    "type" to "ignored",
+                    "reason" to "empty_notification"
+                )
+            )
+
             return
         }
 
         val state = "$title|$text|$bigText"
 
-        // Spotify may post the same notification repeatedly.
         if (state == lastNotificationState) {
             return
         }
@@ -59,6 +65,15 @@ class SpotifyNotificationListener : NotificationListenerService() {
                 Log.d(TAG, "Title: $title")
                 Log.d(TAG, "Text: $text")
                 Log.d(TAG, "BigText: $bigText")
+
+                SpotifyEventBridge.sendEvent(
+                    mapOf(
+                        "type" to "advertisement",
+                        "title" to title,
+                        "text" to text,
+                        "bigText" to bigText
+                    )
+                )
             }
 
             isMusic(title, text) -> {
@@ -66,13 +81,28 @@ class SpotifyNotificationListener : NotificationListenerService() {
                 Log.d(TAG, "Title: $title")
                 Log.d(TAG, "Text: $text")
                 Log.d(TAG, "BigText: $bigText")
+
+                SpotifyEventBridge.sendEvent(
+                    mapOf(
+                        "type" to "music",
+                        "title" to title,
+                        "text" to text,
+                        "bigText" to bigText
+                    )
+                )
             }
 
             else -> {
                 Log.d(TAG, "⚪ IGNORED SPOTIFY NOTIFICATION")
-                Log.d(TAG, "Title: $title")
-                Log.d(TAG, "Text: $text")
-                Log.d(TAG, "BigText: $bigText")
+
+                SpotifyEventBridge.sendEvent(
+                    mapOf(
+                        "type" to "ignored",
+                        "title" to title,
+                        "text" to text,
+                        "bigText" to bigText
+                    )
+                )
             }
         }
     }
@@ -83,6 +113,12 @@ class SpotifyNotificationListener : NotificationListenerService() {
         }
 
         Log.d(TAG, "Spotify notification removed")
+
+        SpotifyEventBridge.sendEvent(
+            mapOf(
+                "type" to "notification_removed"
+            )
+        )
     }
 
     private fun isAdvertisement(

@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 
 class AndroidBridge {
   static const MethodChannel _channel =
       MethodChannel('spotify_ad_skipper/android');
+
+  static const EventChannel _eventChannel =
+      EventChannel('spotify_ad_skipper/events');
 
   static Future<Map<String, dynamic>> getPlatformInfo() async {
     final result = await _channel.invokeMethod<Map>('getPlatformInfo');
@@ -28,4 +33,11 @@ class AndroidBridge {
 
     return result ?? false;
   }
+
+  static Stream<Map<String, dynamic>> get spotifyEvents {
+    return _eventChannel
+        .receiveBroadcastStream()
+        .map((event) => Map<String, dynamic>.from(event as Map));
+  }
 }
+
