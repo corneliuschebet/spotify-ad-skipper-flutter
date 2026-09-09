@@ -10,12 +10,25 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
-    private val CHANNEL = "spotify_ad_skipper/android"
-    private val EVENT_CHANNEL = "spotify_ad_skipper/events"
+    companion object {
+        private const val CHANNEL =
+            "spotify_ad_skipper/android"
 
-    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        super.configureFlutterEngine(flutterEngine)
+        private const val EVENT_CHANNEL =
+            "spotify_ad_skipper/events"
+    }
 
+    override fun configureFlutterEngine(
+        flutterEngine: FlutterEngine
+    ) {
+
+        super.configureFlutterEngine(
+            flutterEngine
+        )
+
+        /*
+         * Flutter → Android method channel.
+         */
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL
@@ -23,7 +36,11 @@ class MainActivity : FlutterActivity() {
 
             when (call.method) {
 
+                /*
+                 * Platform information.
+                 */
                 "getPlatformInfo" -> {
+
                     val info = mapOf(
                         "manufacturer" to Build.MANUFACTURER,
                         "model" to Build.MODEL,
@@ -34,17 +51,100 @@ class MainActivity : FlutterActivity() {
                     result.success(info)
                 }
 
+                /*
+                 * Notification listener status.
+                 */
                 "isNotificationListenerEnabled" -> {
-                    result.success(isNotificationListenerEnabled())
+
+                    result.success(
+                        isNotificationListenerEnabled()
+                    )
                 }
 
+                /*
+                 * Open Android notification listener settings.
+                 */
                 "openNotificationListenerSettings" -> {
+
                     openNotificationListenerSettings()
+
                     result.success(true)
                 }
 
+                /*
+                 * Check whether our notification listener
+                 * currently has a media controller.
+                 */
                 "isSkipperRunning" -> {
-                    result.success(false)
+
+                    val running =
+                        SpotifyNotificationListener
+                            .getMediaController() != null
+
+                    result.success(running)
+                }
+
+                /*
+                 * Send NEXT to Spotify.
+                 */
+                "spotifyNext" -> {
+
+                    val controller =
+                        SpotifyNotificationListener
+                            .getMediaController()
+
+                    if (controller == null) {
+
+                        result.success(false)
+
+                    } else {
+
+                        result.success(
+                            controller.testNext()
+                        )
+                    }
+                }
+
+                /*
+                 * Send PAUSE to Spotify.
+                 */
+                "spotifyPause" -> {
+
+                    val controller =
+                        SpotifyNotificationListener
+                            .getMediaController()
+
+                    if (controller == null) {
+
+                        result.success(false)
+
+                    } else {
+
+                        result.success(
+                            controller.testPause()
+                        )
+                    }
+                }
+
+                /*
+                 * Send PLAY to Spotify.
+                 */
+                "spotifyPlay" -> {
+
+                    val controller =
+                        SpotifyNotificationListener
+                            .getMediaController()
+
+                    if (controller == null) {
+
+                        result.success(false)
+
+                    } else {
+
+                        result.success(
+                            controller.testPlay()
+                        )
+                    }
                 }
 
                 else -> {
@@ -53,38 +153,57 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        /*
+         * Android → Flutter event stream.
+         */
         EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             EVENT_CHANNEL
-        ).setStreamHandler(object : EventChannel.StreamHandler {
+        ).setStreamHandler(
+            object : EventChannel.StreamHandler {
 
-            override fun onListen(
-                arguments: Any?,
-                events: EventChannel.EventSink?
-            ) {
-                SpotifyEventBridge.setEventSink(events)
-            }
+                override fun onListen(
+                    arguments: Any?,
+                    events: EventChannel.EventSink?
+                ) {
 
-            override fun onCancel(arguments: Any?) {
-                SpotifyEventBridge.setEventSink(null)
+                    SpotifyEventBridge.setEventSink(
+                        events
+                    )
+                }
+
+                override fun onCancel(
+                    arguments: Any?
+                ) {
+
+                    SpotifyEventBridge.setEventSink(
+                        null
+                    )
+                }
             }
-        })
+        )
     }
 
     private fun isNotificationListenerEnabled(): Boolean {
-        val enabledListeners = Settings.Secure.getString(
-            contentResolver,
-            "enabled_notification_listeners"
-        ) ?: return false
+
+        val enabledListeners =
+            Settings.Secure.getString(
+                contentResolver,
+                "enabled_notification_listeners"
+            ) ?: return false
 
         return enabledListeners
             .split(":")
             .any { componentName ->
-                componentName.startsWith(packageName)
+
+                componentName.startsWith(
+                    packageName
+                )
             }
     }
 
     private fun openNotificationListenerSettings() {
+
         val intent = Intent(
             Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
         )
