@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'services/android_bridge.dart';
 
 void main() {
@@ -34,13 +35,33 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage>
+    with WidgetsBindingObserver {
   Map<String, dynamic>? platformInfo;
+  bool notificationListenerEnabled = false;
+  bool loadingNotificationStatus = true;
 
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
+
     _loadPlatformInfo();
+    _loadNotificationListenerStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadNotificationListenerStatus();
+    }
   }
 
   Future<void> _loadPlatformInfo() async {
@@ -54,6 +75,28 @@ class _DashboardPageState extends State<DashboardPage> {
       });
     } catch (error) {
       debugPrint('Failed to load Android platform information: $error');
+    }
+  }
+
+  Future<void> _loadNotificationListenerStatus() async {
+    try {
+      final enabled = await AndroidBridge.isNotificationListenerEnabled();
+
+      if (!mounted) return;
+
+      setState(() {
+        notificationListenerEnabled = enabled;
+        loadingNotificationStatus = false;
+      });
+    } catch (error) {
+      debugPrint('Failed to load notification listener status: $error');
+
+      if (!mounted) return;
+
+      setState(() {
+        notificationListenerEnabled = false;
+        loadingNotificationStatus = false;
+      });
     }
   }
 
@@ -88,6 +131,12 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildStatusCard() {
+    final notificationStatus = loadingNotificationStatus
+        ? 'Checking...'
+        : notificationListenerEnabled
+        ? 'Connected'
+        : 'Not connected';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -106,7 +155,11 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             const SizedBox(height: 20),
             _statusRow(Icons.music_note, 'Spotify', 'Waiting'),
-            _statusRow(Icons.notifications, 'Notifications', 'Not connected'),
+            _statusRow(
+              Icons.notifications,
+              'Notifications',
+              notificationStatus,
+            ),
             _statusRow(Icons.settings, 'Android Service', 'Not configured'),
           ],
         ),
